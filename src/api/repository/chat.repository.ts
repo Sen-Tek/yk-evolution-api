@@ -27,7 +27,7 @@ export class ChatRepository extends Repository {
 
     try {
       this.logger.verbose('saving chats to store');
-      if (this.dbSettings.ENABLED && saveDb) {
+      if (this.dbSettings.ENABLED) {
         this.logger.verbose('saving chats to db');
         const insert = await this.chatModel.insertMany([...data]);
 
@@ -70,7 +70,7 @@ export class ChatRepository extends Repository {
       this.logger.verbose('searching chats');
       if (this.dbSettings.ENABLED) {
         this.logger.verbose('searching chats in db');
-        return await this.chatModel.find({ name: { $regex: search, $options: 'i' } });
+        return await this.chatModel.find({ id: { $regex: search, $options: 'ix' } });
         // .skip((page - 1) * perPage)
         // .limit(perPage);
       }

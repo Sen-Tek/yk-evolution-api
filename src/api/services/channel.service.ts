@@ -1234,17 +1234,21 @@ export class ChannelStartupService {
     return `${number}@s.whatsapp.net`;
   }
 
-  public async searchContacts(search: string, page: number, perPage: number): Promise<(ContactRaw | ChatRaw)[]> {
+  public async searchProspects(search: string, page: number, perPage: number): Promise<any> {
     this.logger.verbose('Searching contact');
-    const contacts = Promise.all([
-      this.repository.contact.searchContacts(search),
+    const [contacts, chats] = await Promise.all([
+      this.repository.contact.searchProspects(search),
       this.repository.chat.search(search),
-    ]).then(([contacts, chats]) => {
-      console.log(`found ${contacts.length} contacts and ${chats.length} chats`);
-      return [...contacts, ...chats].slice((page - 1) * perPage, page * perPage);
-    });
-
-    return contacts;
+    ]);
+    console.log(`found ${contacts.length} contacts and ${chats.length} chats`);
+    const totalItems = contacts.length + chats.length;
+    const toSend = [...contacts, ...chats].slice((page - 1) * perPage, page * perPage);
+    return {
+      page: page,
+      perPage: perPage,
+      totalItems: totalItems,
+      items: toSend,
+    };
   }
 
   public async fetchContacts(query: ContactQuery) {

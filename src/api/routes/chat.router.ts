@@ -186,8 +186,8 @@ export class ChatRouter extends RouterBroker {
 
         return res.status(HttpStatus.OK).json(response);
       })
-      .post(this.routerPath('searchContacts'), ...guards, async (req, res) => {
-        logger.verbose('request received in searchContacts');
+      .post(this.routerPath('searchProspects'), ...guards, async (req, res) => {
+        logger.verbose('request received in searchProspects');
         logger.verbose('request body: ');
         logger.verbose(req.body);
 
@@ -198,7 +198,7 @@ export class ChatRouter extends RouterBroker {
           request: req,
           schema: contactValidateSchema,
           ClassRef: ContactQuery,
-          execute: (instance, data) => chatController.searchContacts(instance, data),
+          execute: (instance, data) => chatController.searchProspects(instance, data),
         });
 
         return res.status(HttpStatus.OK).json(response);

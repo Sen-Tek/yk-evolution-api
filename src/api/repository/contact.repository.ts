@@ -8,7 +8,7 @@ import { ContactRaw, ContactRawSelect, IContactModel } from '../models';
 
 export class ContactQuery {
   select?: ContactRawSelect;
-  where: ContactRaw;
+  where: { owner: string } & Partial<ContactRaw>;
 }
 
 export class ContactQueryMany {
@@ -130,13 +130,13 @@ export class ContactRepository extends Repository {
     }
   }
 
-  public async searchContacts(search: string /*,page : number,perPage:number*/): Promise<ContactRaw[]> {
+  public async searchProspects(search: string /*,page : number,perPage:number*/): Promise<ContactRaw[]> {
     try {
       this.logger.verbose(`searching contacts with search: ${search}`);
       if (this.dbSettings.ENABLED) {
         this.logger.verbose('searching contacts in db');
         return await this.contactModel.find({
-          $or: [{ pushName: { $regex: search, $options: 'ix' } }, { number: { $regex: search, $options: 'ix' } }],
+          $or: [{ pushName: { $regex: search, $options: 'ix' } }, { id: { $regex: search, $options: 'ix' } }],
         });
         // .skip((page - 1) * perPage)
         // .limit(perPage)

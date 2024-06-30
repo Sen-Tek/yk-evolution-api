@@ -8,7 +8,7 @@ export class ChatRaw {
   owner: string;
   lastMsgTimestamp?: number;
   labels?: string[];
-  name: string;
+  pushName: string;
 }
 
 type ChatRawBoolean<T> = {
@@ -21,7 +21,7 @@ const chatSchema = new Schema<ChatRaw>({
   id: { type: String, required: true, minlength: 1 },
   owner: { type: String, required: true, minlength: 1 },
   labels: { type: [String], default: [] },
-  name: { type: String, required: true, minlength: 1 },
+  pushName: { type: String, required: true, minlength: 1 },
 });
 
 export const ChatModel = dbserver?.model(ChatRaw.name, chatSchema, 'chats');
