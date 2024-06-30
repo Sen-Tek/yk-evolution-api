@@ -49,16 +49,7 @@ services:
     volumes:
       - evolution_redis:/data
 
-  rebrow:
-    container_name: rebrow
-    image: marian/rebrow
-    restart: on-failure
-    depends_on:
-      - redis
-    ports: 
-      - 5001:5001
-    links:
-      - redis
+
 
   api:
     container_name: evolution_api
@@ -68,7 +59,7 @@ services:
       - mongodb
       - redis
     ports:
-      - 8080:8080
+      - 3400:3400
     volumes:
       - evolution_instances:/evolution/instances
       - evolution_store:/evolution/store
@@ -76,7 +67,7 @@ services:
       - .env
     command: ['node', './dist/src/main.js']
     expose:
-      - 8080
+      - 3400
 
 volumes:
   evolution_mongodb_data:

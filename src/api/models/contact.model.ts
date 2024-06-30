@@ -8,6 +8,7 @@ export class ContactRaw {
   id?: string;
   profilePictureUrl?: string;
   owner: string;
+  phone;
 }
 
 type ContactRawBoolean<T> = {

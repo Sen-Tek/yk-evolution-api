@@ -2,6 +2,7 @@ import { Logger } from '../../config/logger.config';
 import {
   ArchiveChatDto,
   BlockUserDto,
+  ContachSearchDto,
   DeleteMessage,
   getBase64FromMediaMessageDto,
   MarkChatUnreadDto,
@@ -66,6 +67,10 @@ export class ChatController {
     return await this.waMonitor.waInstances[instanceName].fetchContacts(query);
   }
 
+  public async searchContacts({ instanceName }: InstanceDto, query: ContachSearchDto) {
+    logger.verbose('requested searchContacts from ' + instanceName + ' instance');
+    return await this.waMonitor.waInstances[instanceName].searchContacts(query.data, query.page, query.perPage);
+  }
   public async getBase64FromMediaMessage({ instanceName }: InstanceDto, data: getBase64FromMediaMessageDto) {
     logger.verbose('requested getBase64FromMediaMessage from ' + instanceName + ' instance');
     return await this.waMonitor.waInstances[instanceName].getBase64FromMediaMessage(data);

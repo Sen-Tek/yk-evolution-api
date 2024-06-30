@@ -23,6 +23,7 @@ import { RouterBroker } from '../abstract/abstract.router';
 import {
   ArchiveChatDto,
   BlockUserDto,
+  ContachSearchDto,
   DeleteMessage,
   getBase64FromMediaMessageDto,
   MarkChatUnreadDto,
@@ -181,6 +182,23 @@ export class ChatRouter extends RouterBroker {
           schema: contactValidateSchema,
           ClassRef: ContactQuery,
           execute: (instance, data) => chatController.fetchContacts(instance, data),
+        });
+
+        return res.status(HttpStatus.OK).json(response);
+      })
+      .post(this.routerPath('searchContacts'), ...guards, async (req, res) => {
+        logger.verbose('request received in searchContacts');
+        logger.verbose('request body: ');
+        logger.verbose(req.body);
+
+        logger.verbose('request query: ');
+        logger.verbose(req.query);
+
+        const response = await this.dataValidate<ContachSearchDto>({
+          request: req,
+          schema: contactValidateSchema,
+          ClassRef: ContactQuery,
+          execute: (instance, data) => chatController.searchContacts(instance, data),
         });
 
         return res.status(HttpStatus.OK).json(response);

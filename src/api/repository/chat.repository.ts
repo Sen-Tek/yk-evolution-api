@@ -8,7 +8,7 @@ import { ChatRaw, ChatRawSelect, IChatModel } from '../models';
 
 export class ChatQuery {
   select?: ChatRawSelect;
-  where: ChatRaw;
+  where: { owner: string } & Partial<ChatRaw>;
 }
 
 export class ChatRepository extends Repository {
@@ -62,6 +62,39 @@ export class ChatRepository extends Repository {
       return error;
     } finally {
       data = undefined;
+    }
+  }
+
+  public async search(search: string /*page: number, perPage*/): Promise<ChatRaw[]> {
+    try {
+      this.logger.verbose('searching chats');
+      if (this.dbSettings.ENABLED) {
+        this.logger.verbose('searching chats in db');
+        return await this.chatModel.find({ name: { $regex: search, $options: 'i' } });
+        // .skip((page - 1) * perPage)
+        // .limit(perPage);
+      }
+
+      this.logger.verbose('searching chats in store');
+
+      const chats: ChatRaw[] = [];
+      const openDir = opendirSync(join(this.storePath, 'chats'));
+      for await (const dirent of openDir) {
+        if (dirent.isFile()) {
+          chats.push(
+            JSON.parse(
+              readFileSync(join(this.storePath, 'chats', dirent.name), {
+                encoding: 'utf-8',
+              }),
+            ),
+          );
+        }
+      }
+
+      this.logger.verbose('chats found in store: ' + chats.length + ' chats');
+      return chats;
+    } catch (error) {
+      return [];
     }
   }
 

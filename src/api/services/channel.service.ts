@@ -29,7 +29,17 @@ import { getSQS, removeQueues as removeQueuesSQS } from '../integrations/sqs/lib
 import { TypebotService } from '../integrations/typebot/services/typebot.service';
 import { getIO } from '../integrations/websocket/libs/socket.server';
 import { WebsocketRaw } from '../integrations/websocket/models/websocket.model';
-import { ChamaaiRaw, IntegrationRaw, ProxyRaw, RabbitmqRaw, SettingsRaw, SqsRaw, TypebotRaw } from '../models';
+import {
+  ChamaaiRaw,
+  ChatRaw,
+  ContactRaw,
+  IntegrationRaw,
+  ProxyRaw,
+  RabbitmqRaw,
+  SettingsRaw,
+  SqsRaw,
+  TypebotRaw,
+} from '../models';
 import { WebhookRaw } from '../models/webhook.model';
 import { ContactQuery } from '../repository/contact.repository';
 import { MessageQuery } from '../repository/message.repository';
@@ -1222,6 +1232,19 @@ export class ChannelStartupService {
 
     this.logger.verbose('Jid created is whatsapp: ' + `${number}@s.whatsapp.net`);
     return `${number}@s.whatsapp.net`;
+  }
+
+  public async searchContacts(search: string, page: number, perPage: number): Promise<(ContactRaw | ChatRaw)[]> {
+    this.logger.verbose('Searching contact');
+    const contacts = Promise.all([
+      this.repository.contact.searchContacts(search),
+      this.repository.chat.search(search),
+    ]).then(([contacts, chats]) => {
+      console.log(`found ${contacts.length} contacts and ${chats.length} chats`);
+      return [...contacts, ...chats].slice((page - 1) * perPage, page * perPage);
+    });
+
+    return contacts;
   }
 
   public async fetchContacts(query: ContactQuery) {

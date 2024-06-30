@@ -130,6 +130,23 @@ export class ContactRepository extends Repository {
     }
   }
 
+  public async searchContacts(search: string /*,page : number,perPage:number*/): Promise<ContactRaw[]> {
+    try {
+      this.logger.verbose(`searching contacts with search: ${search}`);
+      if (this.dbSettings.ENABLED) {
+        this.logger.verbose('searching contacts in db');
+        return await this.contactModel.find({
+          $or: [{ pushName: { $regex: search, $options: 'ix' } }, { number: { $regex: search, $options: 'ix' } }],
+        });
+        // .skip((page - 1) * perPage)
+        // .limit(perPage)
+      }
+      return [];
+    } catch (error) {
+      return [];
+    }
+  }
+
   public async find(query: ContactQuery): Promise<ContactRaw[]> {
     try {
       this.logger.verbose('finding contacts');
@@ -138,7 +155,6 @@ export class ContactRepository extends Repository {
         return await this.contactModel.find({ ...query.where }).select(query.select ?? {});
       }
 
-      this.logger.verbose('finding contacts in store');
       const contacts: ContactRaw[] = [];
       if (query?.where?.id) {
         this.logger.verbose('finding contacts in store by id');
@@ -175,10 +191,10 @@ export class ContactRepository extends Repository {
     }
   }
 
-  public async findManyById(query: ContactQueryMany): Promise<ContactRaw[]> {
+  public async findManyById(query: ContactQueryMany, checkDb = true): Promise<ContactRaw[]> {
     try {
       this.logger.verbose('finding contacts');
-      if (this.dbSettings.ENABLED) {
+      if (checkDb && this.dbSettings.ENABLED) {
         this.logger.verbose('finding contacts in db');
         return await this.contactModel.find({
           owner: query.owner,
