@@ -49,16 +49,7 @@ services:
     volumes:
       - evolution_redis:/data
 
-  rebrow:
-    container_name: rebrow
-    image: marian/rebrow
-    restart: on-failure
-    depends_on:
-      - redis
-    ports: 
-      - 5001:5001
-    links:
-      - redis
+
 
   api:
     container_name: evolution_api

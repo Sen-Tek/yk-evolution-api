@@ -845,7 +845,7 @@ export class BaileysStartupService extends ChannelStartupService {
           continue;
         }
 
-        chatsRaw.push({ id: chat.id, owner: this.instance.wuid });
+        chatsRaw.push({ id: chat.id, owner: this.instance.wuid, pushName: chat.name });
       }
 
       this.logger.verbose('Sending data to webhook in event CHATS_UPSERT');
@@ -866,7 +866,7 @@ export class BaileysStartupService extends ChannelStartupService {
     ) => {
       this.logger.verbose('Event received: chats.update');
       const chatsRaw: ChatRaw[] = chats.map((chat) => {
-        return { id: chat.id, owner: this.instance.wuid };
+        return { id: chat.id, owner: this.instance.wuid, pushName: chat.name };
       });
 
       this.logger.verbose('Sending data to webhook in event CHATS_UPDATE');
@@ -917,6 +917,7 @@ export class BaileysStartupService extends ChannelStartupService {
             pushName: contact?.name || contact?.verifiedName || contact.id.split('@')[0],
             profilePictureUrl: null,
             owner: this.instance.name,
+            //phone: contact?.phone,
           });
         }
 
@@ -1027,6 +1028,7 @@ export class BaileysStartupService extends ChannelStartupService {
             id: chat.id,
             owner: this.instance.name,
             lastMsgTimestamp: chat.lastMessageRecvTimestamp,
+            pushName: chat.name,
           });
         }
 
@@ -1523,7 +1525,7 @@ export class BaileysStartupService extends ChannelStartupService {
             labels = [...labels, data.association.labelId];
           }
           await this.repository.chat.update(
-            [{ id: chat.id, owner: this.instance.name, labels }],
+            [{ id: chat.id, owner: this.instance.name, labels, pushName: chat.pushName }],
             this.instance.name,
             database.SAVE_DATA.CHATS,
           );

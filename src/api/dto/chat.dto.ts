@@ -14,6 +14,12 @@ export class getBase64FromMediaMessageDto {
   convertToMp4?: boolean;
 }
 
+export class ContachSearchDto {
+  data: string;
+  page: number;
+  perPage: number;
+}
+
 export class WhatsAppNumberDto {
   numbers: string[];
 }
