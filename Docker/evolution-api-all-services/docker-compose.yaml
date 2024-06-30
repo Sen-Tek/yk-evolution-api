@@ -22,7 +22,7 @@ services:
   mongo-express:
     container_name: mongodb-express
     image: mongo-express
-    restart: on-failure
+    restart: always
     ports:
       - 8081:8081
     depends_on:
@@ -41,10 +41,10 @@ services:
     image: redis:latest
     restart: on-failure
     ports:
-      - 6379:6379
+      - 6900:6379
     command: >
       redis-server
-      --port 6379
+      --port 6900
       --appendonly yes
     volumes:
       - evolution_redis:/data
@@ -68,7 +68,7 @@ services:
       - mongodb
       - redis
     ports:
-      - 8080:8080
+      - 3400:3400
     volumes:
       - evolution_instances:/evolution/instances
       - evolution_store:/evolution/store
@@ -76,7 +76,7 @@ services:
       - .env
     command: ['node', './dist/src/main.js']
     expose:
-      - 8080
+      - 3400
 
 volumes:
   evolution_mongodb_data:
