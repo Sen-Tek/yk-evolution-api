@@ -154,6 +154,7 @@ export class TypebotService {
   }
 
   public async startTypebot(instance: InstanceDto, data: any) {
+    console.log('typebot data', { data });
     if (data.remoteJid === 'status@broadcast') return;
 
     const remoteJid = data.remoteJid;
@@ -195,6 +196,8 @@ export class TypebotService {
         sessions: newSessions,
         prefilledVariables: prefilledVariables,
       });
+
+      console.log('response start typebot ', { response });
 
       if (response.sessionId) {
         await this.sendWAMessage(instance, remoteJid, response.messages, response.input, response.clientSideActions);
@@ -490,6 +493,7 @@ export class TypebotService {
     input: any[],
     clientSideActions: any[],
   ) {
+    console.log({ instance, remoteJid, messages, input, clientSideActions });
     processMessages(
       this.waMonitor.waInstances[instance.instanceName],
       messages,
@@ -572,7 +576,7 @@ export class TypebotService {
       return formattedText;
     }
 
-    async function processMessages(instance, messages, input, clientSideActions, eventEmitter, applyFormatting) {
+    async function processMessages(instance, messages = [], input, clientSideActions, eventEmitter, applyFormatting) {
       for (const message of messages) {
         if (message.type === 'text') {
           let formattedText = '';
@@ -660,7 +664,14 @@ export class TypebotService {
           }
 
           formattedText = formattedText.replace(/\n$/, '');
-
+          await instance.pollMessage({
+            number: remoteJid.split('@')[0],
+            pollMessage: {
+              name: 'Choisissez',
+              selectableCount: 1,
+              values: items.map((item) => item.content),
+            },
+          });
           await instance.textMessage({
             number: remoteJid.split('@')[0],
             options: {
@@ -682,6 +693,7 @@ export class TypebotService {
   }
 
   public async sendTypebot(instance: InstanceDto, remoteJid: string, msg: MessageRaw) {
+    console.log('sendTypebot', { instance, remoteJid, msg });
     const findTypebot = await this.find(instance);
     const url = findTypebot.url;
     const typebot = findTypebot.typebot;
@@ -719,7 +731,7 @@ export class TypebotService {
             remoteJid: remoteJid,
             pushName: msg.pushName,
           });
-
+          console.log({ data });
           await this.sendWAMessage(instance, remoteJid, data.messages, data.input, data.clientSideActions);
 
           if (data.messages.length === 0) {
@@ -779,7 +791,7 @@ export class TypebotService {
               }
 
               const request = await axios.post(urlTypebot, reqData);
-
+              console.log({ request });
               await this.sendWAMessage(
                 instance,
                 remoteJid,
@@ -818,10 +830,11 @@ export class TypebotService {
             messageType: messageType,
           },
         });
+        console.log(JSON.stringify({ data }, null, 2));
 
         await this.sendWAMessage(instance, remoteJid, data.messages, data.input, data.clientSideActions);
 
-        if (data.messages.length === 0) {
+        if (data.messages?.length === 0) {
           const content = this.getConversationMessage(msg.message);
 
           if (!content) {
@@ -878,7 +891,7 @@ export class TypebotService {
               };
             }
             request = await axios.post(urlTypebot, reqData);
-
+            console.log({ request });
             await this.sendWAMessage(
               instance,
               remoteJid,
@@ -968,7 +981,7 @@ export class TypebotService {
         };
       }
       const request = await axios.post(urlTypebot, reqData);
-
+      console.log({ request });
       await this.sendWAMessage(
         instance,
         remoteJid,
