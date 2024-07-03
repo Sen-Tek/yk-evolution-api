@@ -5,6 +5,7 @@ import { ConfigService, StoreConf } from '../../config/env.config';
 import { Logger } from '../../config/logger.config';
 import { IInsert, Repository } from '../abstract/abstract.repository';
 import { ContactRaw, ContactRawSelect, IContactModel } from '../models';
+import utils from '../services/channels/utils';
 
 export class ContactQuery {
   select?: ContactRawSelect;
@@ -130,14 +131,22 @@ export class ContactRepository extends Repository {
     }
   }
 
-  public async searchProspects(search: string /*,page : number,perPage:number*/): Promise<ContactRaw[]> {
+  public async searchProspects({ search = '', ids = [] } /*,page : number,perPage:number*/): Promise<ContactRaw[]> {
     try {
-      this.logger.verbose(`searching contacts with search: ${search}`);
+      this.logger.verbose(`searching contacts with search: ${search} and ids: ${ids}`);
       if (this.dbSettings.ENABLED) {
+        let query = {};
+        if (search) {
+          query = {
+            $or: [{ pushName: { $regex: search, $options: 'ix' } }, { id: { $regex: search, $options: 'ix' } }],
+          };
+        }
+        if (ids) {
+          query = { id: { $in: ids } };
+        }
+        utils.debug('query', query);
         this.logger.verbose('searching contacts in db');
-        return await this.contactModel.find({
-          $or: [{ pushName: { $regex: search, $options: 'ix' } }, { id: { $regex: search, $options: 'ix' } }],
-        });
+        return await this.contactModel.find(query);
         // .skip((page - 1) * perPage)
         // .limit(perPage)
       }
