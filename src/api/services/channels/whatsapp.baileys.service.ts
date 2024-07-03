@@ -467,7 +467,8 @@ export class BaileysStartupService extends ChannelStartupService {
         this.logger.verbose('Returning full message');
         return webMessageInfo[0];
       }
-      if (webMessageInfo[0].message?.pollCreationMessage) {
+      console.log(JSON.stringify(webMessageInfo[0].message, null, 2));
+      if (Object.keys(webMessageInfo[0].message).some((key) => key.includes('pollCreationMessage'))) {
         this.logger.verbose('Returning poll message');
         const messageSecretBase64 = webMessageInfo[0].message?.messageContextInfo?.messageSecret;
 
@@ -478,7 +479,7 @@ export class BaileysStartupService extends ChannelStartupService {
             messageContextInfo: {
               messageSecret,
             },
-            pollCreationMessage: webMessageInfo[0].message?.pollCreationMessage,
+            pollCreationMessage: webMessageInfo[0].message?.pollCreationMessageV3,
           };
 
           return msg;
