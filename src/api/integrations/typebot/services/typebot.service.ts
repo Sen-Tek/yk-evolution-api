@@ -668,7 +668,7 @@ export class TypebotService {
             number: remoteJid.split('@')[0],
             pollMessage: {
               name: 'Choisissez',
-              selectableCount: 1,
+              selectableCount: items.length,
               values: items.map((item) => item.content),
             },
           });
