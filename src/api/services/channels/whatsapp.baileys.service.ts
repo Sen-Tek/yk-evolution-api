@@ -473,7 +473,7 @@ export class BaileysStartupService extends ChannelStartupService {
         where: { owner: this.instance.name, key: { id: key.id } },
       })) as unknown as proto.IWebMessageInfo[];
       console.log(JSON.stringify(webMessageInfo[0].message, null, 2));
-      if (1 === 1 || webMessageInfo[0].message?.pollUpdateMessage) {
+      if (Object.keys(webMessageInfo[0].message).some((key) => key.includes('pollCreationMessage'))) {
         console.log('Returning poll update message');
         const msg = await this.store.loadMessage(key.remoteJid, key.id);
         console.log('stre msg', JSON.stringify({ msg }, null, 2));
@@ -1289,6 +1289,8 @@ export class BaileysStartupService extends ChannelStartupService {
             await this.baileysCache.delete(received.key.id);
           }
           console.log('third reached');
+          if (received.message.pollUpdateMessage) {
+          }
           // if (received.message?.pollUpdateMessage) {
           //   const originalMessage = await this.getMessage(
           //     received.message.pollUpdateMessage.pollCreationMessageKey,
