@@ -472,7 +472,7 @@ export class BaileysStartupService extends ChannelStartupService {
       const webMessageInfo = (await this.repository.message.find({
         where: { owner: this.instance.name, key: { id: key.id } },
       })) as unknown as proto.IWebMessageInfo[];
-      console.log(JSON.stringify(webMessageInfo[0].message, null, 2));
+      // console.log(JSON.stringify(webMessageInfo[0].message, null, 2));
       if (Object.keys(webMessageInfo[0].message).some((key) => key.includes('pollCreationMessage'))) {
         console.log('Returning poll update message');
         const msg = await this.store.loadMessage(key.remoteJid, key.id);
@@ -759,6 +759,10 @@ export class BaileysStartupService extends ChannelStartupService {
       setInterval(() => {
         this.store.writeToFile(`${'store'}/baileys_store.json`);
       }, 10_000);
+      //clear store every 30 minutes
+      setInterval(() => {
+        //this.store.messages.clear()
+      }, 1_800_000);
 
       this.client = makeWASocket(socketConfig);
 
@@ -1259,9 +1263,9 @@ export class BaileysStartupService extends ChannelStartupService {
     ) => {
       try {
         this.logger.verbose(`Event received: messages.upsert with type ${type} `);
-        console.log(messages);
+        //console.log(messages);
         for (const received of messages) {
-          console.log(JSON.stringify(received, null, 2));
+          //console.log(JSON.stringify(received, null, 2));
           if (
             this.localChatwoot.enabled &&
             (received.message?.protocolMessage?.editedMessage || received.message?.editedMessage?.message)
@@ -1272,7 +1276,7 @@ export class BaileysStartupService extends ChannelStartupService {
               this.chatwootService.eventWhatsapp('messages.edit', { instanceName: this.instance.name }, editedMessage);
             }
           }
-          console.log('first reached');
+          //console.log('first reached');
 
           if (received.messageStubParameters && received.messageStubParameters[0] === 'Message absent from node') {
             this.logger.info('Recovering message lost');
@@ -1280,15 +1284,15 @@ export class BaileysStartupService extends ChannelStartupService {
             await this.baileysCache.set(received.key.id, received);
             continue;
           }
-          console.log('second reached');
+          //console.log('second reached');
 
           const retryCache = (await this.baileysCache.get(received.key.id)) || null;
-          console.log({ retryCache });
+          //console.log({ retryCache });
           if (retryCache) {
             this.logger.info('Recovered message lost');
             await this.baileysCache.delete(received.key.id);
           }
-          console.log('third reached');
+          //console.log('third reached');
           if (received.message.pollUpdateMessage) {
           }
           // if (received.message?.pollUpdateMessage) {
@@ -1411,6 +1415,7 @@ export class BaileysStartupService extends ChannelStartupService {
               source: getDevice(received.key.id),
             };
           }
+          utils.debug('Message_content', messageRaw.message);
 
           if (this.localSettings.read_messages && received.key.id !== 'status@broadcast') {
             await this.client.readMessages([received.key]);
@@ -1534,6 +1539,7 @@ export class BaileysStartupService extends ChannelStartupService {
         5: 'PLAYED',
       };
       for await (const { key, update } of args) {
+        utils.debug('Message update', { key, update });
         if (settings?.groups_ignore && key.remoteJid?.includes('@g.us')) {
           this.logger.verbose('group ignored');
           return;
@@ -1562,59 +1568,89 @@ export class BaileysStartupService extends ChannelStartupService {
                 message: pollCreation as proto.IMessage,
                 pollUpdates: update.pollUpdates,
               });
+
+              utils.debug('Poll updates', pollUpdates);
+              const selectedOptions = pollUpdates.filter((poll) => poll.voters.length > 0);
+              if (selectedOptions.length > 1) {
+                this.logger.error('Multiple selection not allowed');
+              } else {
+                const selectedOption = selectedOptions[0];
+                const typebotSessionRemoteJid = this.localTypebot.sessions?.find(
+                  (session) => session.remoteJid === key.remoteJid,
+                );
+                if (this.localTypebot.enabled || typebotSessionRemoteJid) {
+                  console.log('poll text reponse', {
+                    message: selectedOption.name,
+                    owner: selectedOption.voters[0],
+                  });
+                  await this.typebotService.sendTypebot(
+                    { instanceName: this.instance.name },
+                    selectedOption.voters[0],
+                    {
+                      message: {
+                        extendedTextMessage: {
+                          text: selectedOption.name,
+                          contextInfo: {},
+                        },
+                      },
+                      owner: selectedOption.voters[0],
+                    },
+                  );
+                }
+              }
             }
-          }
 
-          if (status[update.status] === 'READ' && !key.fromMe) return;
+            if (status[update.status] === 'READ' && !key.fromMe) return;
 
-          if (update.message === null && update.status === undefined) {
-            this.logger.verbose('Message deleted');
+            if (update.message === null && update.status === undefined) {
+              this.logger.verbose('Message deleted');
 
-            this.logger.verbose('Sending data to webhook in event MESSAGE_DELETE');
-            this.sendDataWebhook(Events.MESSAGES_DELETE, key);
+              this.logger.verbose('Sending data to webhook in event MESSAGE_DELETE');
+              this.sendDataWebhook(Events.MESSAGES_DELETE, key);
+
+              const message: MessageUpdateRaw = {
+                ...key,
+                status: 'DELETED',
+                datetime: Date.now(),
+                owner: this.instance.name,
+              };
+
+              this.logger.verbose(message);
+
+              this.logger.verbose('Inserting message in database');
+              await this.repository.messageUpdate.insert(
+                [message],
+                this.instance.name,
+                database.SAVE_DATA.MESSAGE_UPDATE,
+              );
+
+              if (this.localChatwoot.enabled) {
+                this.chatwootService.eventWhatsapp(
+                  Events.MESSAGES_DELETE,
+                  { instanceName: this.instance.name },
+                  { key: key },
+                );
+              }
+
+              return;
+            }
 
             const message: MessageUpdateRaw = {
               ...key,
-              status: 'DELETED',
+              status: status[update.status],
               datetime: Date.now(),
               owner: this.instance.name,
+              pollUpdates,
             };
 
             this.logger.verbose(message);
 
+            this.logger.verbose('Sending data to webhook in event MESSAGES_UPDATE');
+            this.sendDataWebhook(Events.MESSAGES_UPDATE, message);
+
             this.logger.verbose('Inserting message in database');
-            await this.repository.messageUpdate.insert(
-              [message],
-              this.instance.name,
-              database.SAVE_DATA.MESSAGE_UPDATE,
-            );
-
-            if (this.localChatwoot.enabled) {
-              this.chatwootService.eventWhatsapp(
-                Events.MESSAGES_DELETE,
-                { instanceName: this.instance.name },
-                { key: key },
-              );
-            }
-
-            return;
+            this.repository.messageUpdate.insert([message], this.instance.name, database.SAVE_DATA.MESSAGE_UPDATE);
           }
-
-          const message: MessageUpdateRaw = {
-            ...key,
-            status: status[update.status],
-            datetime: Date.now(),
-            owner: this.instance.name,
-            pollUpdates,
-          };
-
-          this.logger.verbose(message);
-
-          this.logger.verbose('Sending data to webhook in event MESSAGES_UPDATE');
-          this.sendDataWebhook(Events.MESSAGES_UPDATE, message);
-
-          this.logger.verbose('Inserting message in database');
-          this.repository.messageUpdate.insert([message], this.instance.name, database.SAVE_DATA.MESSAGE_UPDATE);
         }
       }
     },
@@ -1735,7 +1771,7 @@ export class BaileysStartupService extends ChannelStartupService {
         this.logger.verbose(`Event received: ${Object.keys(events).join(', ')}`);
         const database = this.configService.get<Database>('DATABASE');
         const settings = await this.findSettings();
-        console.log(JSON.stringify(events, null, 2));
+        //console.log(JSON.stringify(events, null, 2));
         if (events.call) {
           this.logger.verbose('Listening event: call');
           const call = events.call[0];
@@ -2241,7 +2277,10 @@ export class BaileysStartupService extends ChannelStartupService {
         this.instance.name,
         this.configService.get<Database>('DATABASE').SAVE_DATA.NEW_MESSAGE,
       );
-
+      this.client.ev.emit('messages.upsert', {
+        messages: [messageRaw],
+        type: 'notify',
+      });
       return messageSent;
     } catch (error) {
       this.logger.error(error);

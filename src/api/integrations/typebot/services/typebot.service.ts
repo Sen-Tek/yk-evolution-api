@@ -5,6 +5,7 @@ import { ConfigService, Typebot } from '../../../../config/env.config';
 import { Logger } from '../../../../config/logger.config';
 import { InstanceDto } from '../../../dto/instance.dto';
 import { MessageRaw } from '../../../models';
+import utils from '../../../services/channels/utils';
 import { WAMonitoringService } from '../../../services/monitor.service';
 import { Events } from '../../../types/wa.types';
 import { Session, TypebotDto } from '../dto/typebot.dto';
@@ -668,7 +669,7 @@ export class TypebotService {
             number: remoteJid.split('@')[0],
             pollMessage: {
               name: 'Choisissez',
-              selectableCount: items.length,
+              selectableCount: 1,
               values: items.map((item) => item.content),
             },
           });
@@ -706,9 +707,10 @@ export class TypebotService {
     const messageType = this.getTypeMessage(msg.message).messageType;
 
     const session = sessions.find((session) => session.remoteJid === remoteJid);
-
+    utils.debug('session', session);
     try {
       if (session && expire && expire > 0) {
+        this.logger.verbose('session and expire');
         const now = Date.now();
 
         const diff = now - session.updateAt;
@@ -716,6 +718,7 @@ export class TypebotService {
         const diffInMinutes = Math.floor(diff / 1000 / 60);
 
         if (diffInMinutes > expire) {
+          this.logger.verbose('session expired');
           const newSessions = await this.clearSessions(instance, remoteJid);
 
           const data = await this.createNewSession(instance, {
@@ -790,6 +793,8 @@ export class TypebotService {
                 };
               }
 
+              console.log({ urlTypebot, reqData });
+
               const request = await axios.post(urlTypebot, reqData);
               console.log({ request });
               await this.sendWAMessage(
@@ -810,10 +815,12 @@ export class TypebotService {
       }
 
       if (session && session.status !== 'opened') {
+        this.logger.verbose('session not opened');
         return;
       }
 
       if (!session) {
+        this.logger.verbose('session not found');
         const data = await this.createNewSession(instance, {
           enabled: findTypebot.enabled,
           url: url,

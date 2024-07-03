@@ -20,6 +20,9 @@ interface HttpResponse {
 }
 
 const utils = {
+  debug: (title, obj: any) => {
+    console.log(title, JSON.stringify(obj, null, 2));
+  },
   formatPhone: (contact: string, full = false): string => {
     const domain = contact.includes('@g.us') ? '@g.us' : '@s.whatsapp.net';
     contact = contact.replace(domain, '');
