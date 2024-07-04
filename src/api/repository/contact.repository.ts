@@ -132,6 +132,7 @@ export class ContactRepository extends Repository {
   }
 
   public async searchProspects({ search = '', ids = [] } /*,page : number,perPage:number*/): Promise<ContactRaw[]> {
+    ids = ids.map((id) => id.trim().split('@')[0] + '@s.whatsapp.net');
     try {
       this.logger.verbose(`searching contacts with search: ${search} and ids: ${ids}`);
       if (this.dbSettings.ENABLED) {

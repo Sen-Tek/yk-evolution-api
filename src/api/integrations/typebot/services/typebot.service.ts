@@ -664,7 +664,6 @@ export class TypebotService {
             formattedText += `▶️ ${item.content}\n`;
           }
 
-          formattedText = formattedText.replace(/\n$/, '');
           await instance.pollMessage({
             number: remoteJid.split('@')[0],
             pollMessage: {
@@ -673,16 +672,17 @@ export class TypebotService {
               values: items.map((item) => item.content),
             },
           });
-          await instance.textMessage({
-            number: remoteJid.split('@')[0],
-            options: {
-              delay: instance.localTypebot.delay_message || 1000,
-              presence: 'composing',
-            },
-            textMessage: {
-              text: formattedText,
-            },
-          });
+          //formattedText = formattedText.replace(/\n$/, '');
+          // await instance.textMessage({
+          //   number: remoteJid.split('@')[0],
+          //   options: {
+          //     delay: instance.localTypebot.delay_message || 1000,
+          //     presence: 'composing',
+          //   },
+          //   textMessage: {
+          //     text: formattedText,
+          //   },
+          // });
         }
       } else {
         eventEmitter.emit('typebot:end', {
