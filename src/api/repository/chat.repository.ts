@@ -67,14 +67,15 @@ export class ChatRepository extends Repository {
   }
 
   public async search({ search = '', ids = [] } /*page: number, perPage*/): Promise<ChatRaw[]> {
+    ids = ids.map((id) => id.trim().split('@')[0] + '@s.whatsapp.net');
     try {
       this.logger.verbose('searching chats');
       const query = {};
       if (query) {
         query['id'] = { $regex: search, $options: 'ix' };
       }
-      if (ids) {
-        query['id'] = { $in: ids };
+      if (ids.length > 0) {
+        query['id'] = { $in: ids.map((id) => id) };
       }
       utils.debug('query', query);
       if (this.dbSettings.ENABLED) {

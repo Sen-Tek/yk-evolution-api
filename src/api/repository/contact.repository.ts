@@ -133,6 +133,7 @@ export class ContactRepository extends Repository {
 
   public async searchProspects({ search = '', ids = [] } /*,page : number,perPage:number*/): Promise<ContactRaw[]> {
     ids = ids.map((id) => id.trim().split('@')[0] + '@s.whatsapp.net');
+    console.log({ search, ids });
     try {
       this.logger.verbose(`searching contacts with search: ${search} and ids: ${ids}`);
       if (this.dbSettings.ENABLED) {
@@ -142,7 +143,7 @@ export class ContactRepository extends Repository {
             $or: [{ pushName: { $regex: search, $options: 'ix' } }, { id: { $regex: search, $options: 'ix' } }],
           };
         }
-        if (ids) {
+        if (ids.length > 0) {
           query = { id: { $in: ids } };
         }
         utils.debug('query', query);
