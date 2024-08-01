@@ -1,15 +1,15 @@
 FROM node:20.7.0-alpine AS builder
 
-LABEL version="1.8.0" description="Api to control whatsapp features through http requests." 
-LABEL maintainer="Davidson Gomes" git="https://github.com/DavidsonGomes"
-LABEL contact="contato@agenciadgcode.com"
+LABEL version="1.8.1" description="forked from evolution Api to control whatsapp features through http requests." 
+LABEL maintainer="Youngkhaf" git="https://github.com/youngkhaf"
+LABEL contact="youngkhaf@gmail.com"
 
 RUN apk update && apk upgrade && \
     apk add --no-cache git tzdata ffmpeg wget curl
 
 WORKDIR /evolution
 
-COPY ./package.json .
+COPY ./package.json  ./package-lock.json .
 
 RUN npm install
 
@@ -23,8 +23,8 @@ ENV TZ=America/Sao_Paulo
 ENV DOCKER_ENV=true
 
 ENV SERVER_TYPE=http
-ENV SERVER_PORT=8080
-ENV SERVER_URL=http://localhost:8080
+ENV SERVER_PORT=3400
+ENV SERVER_URL=http://localhost:3400
 
 ENV CORS_ORIGIN=*
 ENV CORS_METHODS=POST,GET,PUT,DELETE
@@ -48,15 +48,15 @@ ENV CLEAN_STORE_MESSAGE_UP=true
 ENV CLEAN_STORE_CONTACTS=true
 ENV CLEAN_STORE_CHATS=true
 
-ENV DATABASE_ENABLED=false
+ENV DATABASE_ENABLED=true
 ENV DATABASE_CONNECTION_URI=mongodb://root:root@mongodb:27017/?authSource=admin&readPreference=primary&ssl=false&directConnection=true
 ENV DATABASE_CONNECTION_DB_PREFIX_NAME=evolution
 
-ENV DATABASE_SAVE_DATA_INSTANCE=false
-ENV DATABASE_SAVE_DATA_NEW_MESSAGE=false
-ENV DATABASE_SAVE_MESSAGE_UPDATE=false
-ENV DATABASE_SAVE_DATA_CONTACTS=false
-ENV DATABASE_SAVE_DATA_CHATS=false
+ENV DATABASE_SAVE_DATA_INSTANCE=true
+ENV DATABASE_SAVE_DATA_NEW_MESSAGE=true
+ENV DATABASE_SAVE_MESSAGE_UPDATE=true
+ENV DATABASE_SAVE_DATA_CONTACTS=true
+ENV DATABASE_SAVE_DATA_CHATS=true
 
 ENV RABBITMQ_ENABLED=false
 ENV RABBITMQ_URI=amqp://guest:guest@rabbitmq:5672
@@ -152,7 +152,7 @@ ENV QRCODE_COLOR=#198754
 ENV TYPEBOT_API_VERSION=latest
 
 ENV CACHE_REDIS_ENABLED=false
-ENV CACHE_REDIS_URI=redis://redis:6379
+ENV CACHE_REDIS_URI=redis://localhost:6379
 ENV CACHE_REDIS_PREFIX_KEY=evolution
 ENV CACHE_REDIS_TTL=604800
 ENV CACHE_REDIS_SAVE_INSTANCES=false

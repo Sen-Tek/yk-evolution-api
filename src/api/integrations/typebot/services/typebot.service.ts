@@ -5,6 +5,7 @@ import { ConfigService, Typebot } from '../../../../config/env.config';
 import { Logger } from '../../../../config/logger.config';
 import { InstanceDto } from '../../../dto/instance.dto';
 import { MessageRaw } from '../../../models';
+import utils from '../../../services/channels/utils';
 import { WAMonitoringService } from '../../../services/monitor.service';
 import { Events } from '../../../types/wa.types';
 import { Session, TypebotDto } from '../dto/typebot.dto';
@@ -154,6 +155,7 @@ export class TypebotService {
   }
 
   public async startTypebot(instance: InstanceDto, data: any) {
+    console.log('typebot data', { data });
     if (data.remoteJid === 'status@broadcast') return;
 
     const remoteJid = data.remoteJid;
@@ -195,6 +197,8 @@ export class TypebotService {
         sessions: newSessions,
         prefilledVariables: prefilledVariables,
       });
+
+      console.log('response start typebot ', { response });
 
       if (response.sessionId) {
         await this.sendWAMessage(instance, remoteJid, response.messages, response.input, response.clientSideActions);
@@ -490,6 +494,7 @@ export class TypebotService {
     input: any[],
     clientSideActions: any[],
   ) {
+    console.log({ instance, remoteJid, messages, input, clientSideActions });
     processMessages(
       this.waMonitor.waInstances[instance.instanceName],
       messages,
@@ -572,7 +577,7 @@ export class TypebotService {
       return formattedText;
     }
 
-    async function processMessages(instance, messages, input, clientSideActions, eventEmitter, applyFormatting) {
+    async function processMessages(instance, messages = [], input, clientSideActions, eventEmitter, applyFormatting) {
       for (const message of messages) {
         if (message.type === 'text') {
           let formattedText = '';
@@ -659,18 +664,25 @@ export class TypebotService {
             formattedText += `▶️ ${item.content}\n`;
           }
 
-          formattedText = formattedText.replace(/\n$/, '');
-
-          await instance.textMessage({
+          await instance.pollMessage({
             number: remoteJid.split('@')[0],
-            options: {
-              delay: instance.localTypebot.delay_message || 1000,
-              presence: 'composing',
-            },
-            textMessage: {
-              text: formattedText,
+            pollMessage: {
+              name: 'Choisissez',
+              selectableCount: 1,
+              values: items.map((item) => item.content),
             },
           });
+          //formattedText = formattedText.replace(/\n$/, '');
+          // await instance.textMessage({
+          //   number: remoteJid.split('@')[0],
+          //   options: {
+          //     delay: instance.localTypebot.delay_message || 1000,
+          //     presence: 'composing',
+          //   },
+          //   textMessage: {
+          //     text: formattedText,
+          //   },
+          // });
         }
       } else {
         eventEmitter.emit('typebot:end', {
@@ -682,6 +694,7 @@ export class TypebotService {
   }
 
   public async sendTypebot(instance: InstanceDto, remoteJid: string, msg: MessageRaw) {
+    console.log('sendTypebot', { instance, remoteJid, msg });
     const findTypebot = await this.find(instance);
     const url = findTypebot.url;
     const typebot = findTypebot.typebot;
@@ -694,9 +707,10 @@ export class TypebotService {
     const messageType = this.getTypeMessage(msg.message).messageType;
 
     const session = sessions.find((session) => session.remoteJid === remoteJid);
-
+    utils.debug('session', session);
     try {
       if (session && expire && expire > 0) {
+        this.logger.verbose('session and expire');
         const now = Date.now();
 
         const diff = now - session.updateAt;
@@ -704,6 +718,7 @@ export class TypebotService {
         const diffInMinutes = Math.floor(diff / 1000 / 60);
 
         if (diffInMinutes > expire) {
+          this.logger.verbose('session expired');
           const newSessions = await this.clearSessions(instance, remoteJid);
 
           const data = await this.createNewSession(instance, {
@@ -719,7 +734,7 @@ export class TypebotService {
             remoteJid: remoteJid,
             pushName: msg.pushName,
           });
-
+          console.log({ data });
           await this.sendWAMessage(instance, remoteJid, data.messages, data.input, data.clientSideActions);
 
           if (data.messages.length === 0) {
@@ -778,8 +793,10 @@ export class TypebotService {
                 };
               }
 
-              const request = await axios.post(urlTypebot, reqData);
+              console.log({ urlTypebot, reqData });
 
+              const request = await axios.post(urlTypebot, reqData);
+              console.log({ request });
               await this.sendWAMessage(
                 instance,
                 remoteJid,
@@ -798,10 +815,12 @@ export class TypebotService {
       }
 
       if (session && session.status !== 'opened') {
+        this.logger.verbose('session not opened');
         return;
       }
 
       if (!session) {
+        this.logger.verbose('session not found');
         const data = await this.createNewSession(instance, {
           enabled: findTypebot.enabled,
           url: url,
@@ -818,10 +837,11 @@ export class TypebotService {
             messageType: messageType,
           },
         });
+        console.log(JSON.stringify({ data }, null, 2));
 
         await this.sendWAMessage(instance, remoteJid, data.messages, data.input, data.clientSideActions);
 
-        if (data.messages.length === 0) {
+        if (data.messages?.length === 0) {
           const content = this.getConversationMessage(msg.message);
 
           if (!content) {
@@ -878,7 +898,7 @@ export class TypebotService {
               };
             }
             request = await axios.post(urlTypebot, reqData);
-
+            console.log({ request });
             await this.sendWAMessage(
               instance,
               remoteJid,
@@ -968,7 +988,7 @@ export class TypebotService {
         };
       }
       const request = await axios.post(urlTypebot, reqData);
-
+      console.log({ request });
       await this.sendWAMessage(
         instance,
         remoteJid,

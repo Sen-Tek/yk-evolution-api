@@ -7,15 +7,17 @@ services:
     command: >
       redis-server --port 6379 --appendonly yes
     volumes:
-      - evolution_redis:/data
+      - /volumes/evolution_redis:/data
     ports:
       - 6379:6379
+    networks:
+      - shared_services
+
 
 volumes:
   evolution_redis:
 
 
 networks:
-  evolution-net:
-    name: evolution-net
-    driver: bridge
+  shared_services:
+    external: true

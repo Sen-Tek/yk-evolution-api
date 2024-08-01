@@ -71,6 +71,7 @@ export class ChatController {
     logger.verbose('requested searchProspects from ' + instanceName + ' instance');
     return await this.waMonitor.waInstances[instanceName].searchProspects(query.data, query.page, query.perPage);
   }
+
   public async getBase64FromMediaMessage({ instanceName }: InstanceDto, data: getBase64FromMediaMessageDto) {
     logger.verbose('requested getBase64FromMediaMessage from ' + instanceName + ' instance');
     return await this.waMonitor.waInstances[instanceName].getBase64FromMediaMessage(data);
