@@ -5,6 +5,7 @@ import { ConfigService, StoreConf } from '../../config/env.config';
 import { Logger } from '../../config/logger.config';
 import { IInsert, Repository } from '../abstract/abstract.repository';
 import { ChatRaw, ChatRawSelect, IChatModel } from '../models';
+import utils from '../services/channels/utils';
 
 export class ChatQuery {
   select?: ChatRawSelect;
@@ -65,12 +66,21 @@ export class ChatRepository extends Repository {
     }
   }
 
-  public async search(search: string /*page: number, perPage*/): Promise<ChatRaw[]> {
+  public async search({ search = '', ids = [] } /*page: number, perPage*/): Promise<ChatRaw[]> {
+    ids = ids.map((id) => id.trim().split('@')[0] + '@s.whatsapp.net');
     try {
       this.logger.verbose('searching chats');
+      const query = {};
+      if (query) {
+        query['id'] = { $regex: search, $options: 'ix' };
+      }
+      if (ids.length > 0) {
+        query['id'] = { $in: ids.map((id) => id) };
+      }
+      utils.debug('query', query);
       if (this.dbSettings.ENABLED) {
         this.logger.verbose('searching chats in db');
-        return await this.chatModel.find({ id: { $regex: search, $options: 'ix' } });
+        return await this.chatModel.find(query);
         // .skip((page - 1) * perPage)
         // .limit(perPage);
       }

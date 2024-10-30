@@ -14,17 +14,19 @@ services:
       - PUID=1000
       - PGID=1000
     volumes:
-      - evolution_mongodb_data:/data/db
-      - evolution_mongodb_configdb:/data/configdb
+      - mongodb_data:/data/db
+      - mongodb_configdb:/data/configdb
     expose:
       - 27017
+    networks:
+      - shared_services
 
   mongo-express:
     container_name: mongodb-express
     image: mongo-express
     restart: always
     ports:
-      - 8081:8081
+      - 8100:8081
     depends_on:
       - mongodb
     environment:
@@ -35,6 +37,8 @@ services:
       ME_CONFIG_MONGODB_ADMINPASSWORD: root
     links:
       - mongodb
+    networks:
+      - shared_services
 
   redis:
     container_name: redis
@@ -47,36 +51,20 @@ services:
       --port 6900
       --appendonly yes
     volumes:
-      - evolution_redis:/data
+      - redis:/data
+    networks:
+      - shared_services
 
 
 
-  api:
-    container_name: evolution_api
-    image: atendai/evolution-api
-    restart: always
-    depends_on:
-      - mongodb
-      - redis
-    ports:
-      - 3400:3400
-    volumes:
-      - evolution_instances:/evolution/instances
-      - evolution_store:/evolution/store
-    env_file:
-      - .env
-    command: ['node', './dist/src/main.js']
-    expose:
-      - 3400
+
 
 volumes:
-  evolution_mongodb_data:
-  evolution_mongodb_configdb:
-  evolution_redis:
-  evolution_instances:
-  evolution_store:
+  mongodb_data:
+  mongodb_configdb:
+  redis:
 
 networks:
-  evolution-net:
+  shared_services:
     external: true
-  
+      

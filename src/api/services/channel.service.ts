@@ -1234,11 +1234,11 @@ export class ChannelStartupService {
     return `${number}@s.whatsapp.net`;
   }
 
-  public async searchProspects(search: string, page: number, perPage: number): Promise<any> {
+  public async searchProspects({ search, ids }, page: number, perPage: number): Promise<any> {
     this.logger.verbose('Searching contact');
     const [contacts, chats] = await Promise.all([
-      this.repository.contact.searchProspects(search),
-      this.repository.chat.search(search),
+      this.repository.contact.searchProspects({ search, ids }),
+      this.repository.chat.search({ search, ids }),
     ]);
     console.log(`found ${contacts.length} contacts and ${chats.length} chats`);
     const totalItems = contacts.length + chats.length;

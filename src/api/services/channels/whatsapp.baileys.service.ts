@@ -8,6 +8,7 @@ import makeWASocket, {
   Chat,
   ConnectionState,
   Contact,
+  decryptPollVote,
   delay,
   DisconnectReason,
   downloadMediaMessage,
@@ -21,6 +22,7 @@ import makeWASocket, {
   isJidGroup,
   isJidUser,
   makeCacheableSignalKeyStore,
+  makeInMemoryStore,
   MessageUpsertType,
   MiscMessageGenerationOptions,
   ParticipantAction,
@@ -69,6 +71,7 @@ import {
 import { INSTANCE_DIR } from '../../../config/path.config';
 import { BadRequestException, InternalServerErrorException, NotFoundException } from '../../../exceptions';
 import { dbserver } from '../../../libs/db.connect';
+import { PollUpdateDecrypt } from '../../../utils/DecryptPollVote';
 import { makeProxyAgent } from '../../../utils/makeProxyAgent';
 import { useMultiFileAuthStateDb } from '../../../utils/use-multi-file-auth-state-db';
 import { AuthStateProvider } from '../../../utils/use-multi-file-auth-state-provider-files';
@@ -131,10 +134,13 @@ import { waMonitor } from '../../server.module';
 import { Events, MessageSubtype, TypeMediaMessage, wa } from '../../types/wa.types';
 import { CacheService } from './../cache.service';
 import { ChannelStartupService } from './../channel.service';
+import utils from './utils';
 
 const groupMetadataCache = new CacheService(new CacheEngine(configService, 'groups').getEngine());
 
 export class BaileysStartupService extends ChannelStartupService {
+  public store: any = null;
+  public vendor: any = null;
   constructor(
     public readonly configService: ConfigService,
     public readonly eventEmitter: EventEmitter2,
@@ -459,31 +465,38 @@ export class BaileysStartupService extends ChannelStartupService {
 
   private async getMessage(key: proto.IMessageKey, full = false) {
     this.logger.verbose('Getting message with key: ' + JSON.stringify(key));
+
+    //if message is pollVote, get from the store
+
     try {
       const webMessageInfo = (await this.repository.message.find({
         where: { owner: this.instance.name, key: { id: key.id } },
       })) as unknown as proto.IWebMessageInfo[];
-      if (full) {
-        this.logger.verbose('Returning full message');
-        return webMessageInfo[0];
+      // console.log(JSON.stringify(webMessageInfo[0].message, null, 2));
+      if (Object.keys(webMessageInfo[0].message).some((key) => key.includes('pollCreationMessage'))) {
+        console.log('Returning poll update message');
+        const msg = await this.store.loadMessage(key.remoteJid, key.id);
+        console.log('stre msg', JSON.stringify({ msg }, null, 2));
+        return msg?.message || undefined;
       }
-      if (webMessageInfo[0].message?.pollCreationMessage) {
-        this.logger.verbose('Returning poll message');
-        const messageSecretBase64 = webMessageInfo[0].message?.messageContextInfo?.messageSecret;
+      // console.log(JSON.stringify(webMessageInfo[0].message, null, 2));
+      // if (Object.keys(webMessageInfo[0].message).some((key) => key.includes('pollCreationMessage'))) {
+      //   this.logger.verbose('Returning poll message');
+      //   const messageSecretBase64 = webMessageInfo[0].message?.messageContextInfo?.messageSecret;
 
-        if (typeof messageSecretBase64 === 'string') {
-          const messageSecret = Buffer.from(messageSecretBase64, 'base64');
+      //   if (typeof messageSecretBase64 === 'string') {
+      //     const messageSecret = Buffer.from(messageSecretBase64, 'base64');
 
-          const msg = {
-            messageContextInfo: {
-              messageSecret,
-            },
-            pollCreationMessage: webMessageInfo[0].message?.pollCreationMessage,
-          };
+      //     const msg = {
+      //       messageContextInfo: {
+      //         messageSecret,
+      //       },
+      //       pollCreationMessage: webMessageInfo[0].message?.pollCreationMessage,
+      //     };
 
-          return msg;
-        }
-      }
+      //     return msg;
+      //   }
+      // }
 
       this.logger.verbose('Returning message');
       return webMessageInfo[0].message;
@@ -642,7 +655,23 @@ export class BaileysStartupService extends ChannelStartupService {
 
       this.logger.verbose('Creating socket');
 
+      this.store = makeInMemoryStore({});
+      this.store.readFromFile(`${'store'}/baileys_store.json`);
+      setInterval(() => {
+        this.store.writeToFile(`${'store'}/baileys_store.json`);
+      }, 10_000);
+      //clear store every 30 minutes
+      setInterval(() => {
+        //this.store.messages.clear()
+      }, 1_800_000);
+
       this.client = makeWASocket(socketConfig);
+
+      this.store?.bind(this.client.ev);
+
+      this.client.ev.on('messages.upsert', async (data) => {
+        console.log({ data });
+      });
 
       this.logger.verbose('Socket created');
 
@@ -845,7 +874,7 @@ export class BaileysStartupService extends ChannelStartupService {
           continue;
         }
 
-        chatsRaw.push({ id: chat.id, owner: this.instance.wuid, pushName: chat.name });
+        chatsRaw.push({ id: chat.id, owner: this.instance.wuid });
       }
 
       this.logger.verbose('Sending data to webhook in event CHATS_UPSERT');
@@ -1028,7 +1057,6 @@ export class BaileysStartupService extends ChannelStartupService {
             id: chat.id,
             owner: this.instance.name,
             lastMsgTimestamp: chat.lastMessageRecvTimestamp,
-            pushName: chat.name,
           });
         }
 
@@ -1134,8 +1162,10 @@ export class BaileysStartupService extends ChannelStartupService {
       settings: SettingsRaw,
     ) => {
       try {
-        this.logger.verbose('Event received: messages.upsert');
+        this.logger.verbose(`Event received: messages.upsert with type ${type} `);
+        //console.log(messages);
         for (const received of messages) {
+          //console.log(JSON.stringify(received, null, 2));
           if (
             this.localChatwoot.enabled &&
             (received.message?.protocolMessage?.editedMessage || received.message?.editedMessage?.message)
@@ -1146,6 +1176,7 @@ export class BaileysStartupService extends ChannelStartupService {
               this.chatwootService.eventWhatsapp('messages.edit', { instanceName: this.instance.name }, editedMessage);
             }
           }
+          //console.log('first reached');
 
           if (received.messageStubParameters && received.messageStubParameters[0] === 'Message absent from node') {
             this.logger.info('Recovering message lost');
@@ -1153,14 +1184,72 @@ export class BaileysStartupService extends ChannelStartupService {
             await this.baileysCache.set(received.key.id, received);
             continue;
           }
+          //console.log('second reached');
 
           const retryCache = (await this.baileysCache.get(received.key.id)) || null;
-
+          //console.log({ retryCache });
           if (retryCache) {
             this.logger.info('Recovered message lost');
             await this.baileysCache.delete(received.key.id);
           }
+          //console.log('third reached');
+          if (received.message.pollUpdateMessage) {
+          }
+          // if (received.message?.pollUpdateMessage) {
+          //   const originalMessage = await this.getMessage(
+          //     received.message.pollUpdateMessage.pollCreationMessageKey,
+          //     true,
+          //   );
+          //   //assert originalMessage is pollCreationMessage
+          //   if (!('message' in originalMessage)) {
+          //     throw new Error('Original message not found');
+          //   }
+          //   // The base64-encoded string
+          //   const base64String = originalMessage.message.messageContextInfo.messageSecret;
 
+          //   // Step 1: Decode the base64 string to a binary string
+          //   const binaryString = atob(base64String);
+
+          //   // Step 2: Create a Uint8Array from the binary string
+          //   const uint8Array = new Uint8Array(binaryString.length);
+          //   for (let i = 0; i < binaryString.length; i++) {
+          //     uint8Array[i] = binaryString.charCodeAt(i);
+          //   }
+
+          //   console.log(JSON.stringify({ originalMessage }, null, 2));
+
+          //   const encPayload = Uint8Array.from(received.message.pollUpdateMessage.vote.encPayload || []);
+          //   const encIv = Uint8Array.from(received.message.pollUpdateMessage.vote.encIv || []);
+          //   const pollCreatorJid = originalMessage.key.remoteJid;
+          //   const pollMsgId = originalMessage.key.id;
+          //   const voterJid = received.key.remoteJid;
+          //   const pollEncKey = uint8Array;
+          //   console.log({ encPayload, encIv, pollCreatorJid, pollMsgId, voterJid, pollEncKey });
+          //   const hash = await PollUpdateDecrypt.decrypt(
+          //     pollEncKey, //encKey, // from PollCreationMessage, HAS to be Uint8Array
+          //     encPayload, // from PollUpdateMessage, HAS to be Uint8Array
+          //     encIv, // from PollUpdateMessage, HAS to be Uint8Array
+          //     pollCreatorJid, // PollCreationMessage sender jid (author)
+          //     pollMsgId, // Message ID of the PollCreationMessage (can be gotten via the store & pollCreationMessageKey property on the update)
+          //     voterJid, // PollUpdateMessage sender jid (author) \\ from above
+          //   );
+          //   const options = originalMessage.message.pollCreationMessage.options.map((option) => option.optionName);
+          //   const option = await PollUpdateDecrypt.compare(options, hash);
+          //   console.log({ option });
+
+          //   decryptPollVote(
+          //     {
+          //       encPayload,
+          //       encIv,
+          //     },
+          //     {
+          //       pollCreatorJid,
+          //       pollMsgId,
+          //       voterJid,
+          //       pollEncKey,
+          //     },
+          //   );
+          // }
           if (
             (type !== 'notify' && type !== 'append') ||
             received.message?.protocolMessage ||
@@ -1188,9 +1277,9 @@ export class BaileysStartupService extends ChannelStartupService {
             received?.message?.stickerMessage ||
             received?.message?.documentMessage ||
             received?.message?.audioMessage;
-
+          console.log({ isMedia });
           const contentMsg = received?.message[getContentType(received.message)] as any;
-
+          console.log({ contentMsg });
           if (this.localWebhook.webhook_base64 === true && isMedia) {
             const buffer = await downloadMediaMessage(
               { key: received.key, message: received?.message },
@@ -1226,6 +1315,7 @@ export class BaileysStartupService extends ChannelStartupService {
               source: getDevice(received.key.id),
             };
           }
+          utils.debug('Message_content', messageRaw.message);
 
           if (this.localSettings.read_messages && received.key.id !== 'status@broadcast') {
             await this.client.readMessages([received.key]);
@@ -1262,7 +1352,7 @@ export class BaileysStartupService extends ChannelStartupService {
 
           if ((this.localTypebot.enabled && type === 'notify') || typebotSessionRemoteJid) {
             if (!(this.localTypebot.listening_from_me === false && messageRaw.key.fromMe === true)) {
-              if (messageRaw.messageType !== 'reactionMessage')
+              if (true && messageRaw.messageType !== 'reactionMessage')
                 await this.typebotService.sendTypebot(
                   { instanceName: this.instance.name },
                   messageRaw.key.remoteJid,
@@ -1333,6 +1423,7 @@ export class BaileysStartupService extends ChannelStartupService {
           this.repository.contact.insert([contactRaw], this.instance.name, database.SAVE_DATA.CONTACTS);
         }
       } catch (error) {
+        console.log(error);
         this.logger.error(error);
       }
     },
@@ -1348,6 +1439,7 @@ export class BaileysStartupService extends ChannelStartupService {
         5: 'PLAYED',
       };
       for await (const { key, update } of args) {
+        utils.debug('Message update', { key, update });
         if (settings?.groups_ignore && key.remoteJid?.includes('@g.us')) {
           this.logger.verbose('group ignored');
           return;
@@ -1376,59 +1468,89 @@ export class BaileysStartupService extends ChannelStartupService {
                 message: pollCreation as proto.IMessage,
                 pollUpdates: update.pollUpdates,
               });
+
+              utils.debug('Poll updates', pollUpdates);
+              const selectedOptions = pollUpdates.filter((poll) => poll.voters.length > 0);
+              if (selectedOptions.length > 1) {
+                this.logger.error('Multiple selection not allowed');
+              } else {
+                const selectedOption = selectedOptions[0];
+                const typebotSessionRemoteJid = this.localTypebot.sessions?.find(
+                  (session) => session.remoteJid === key.remoteJid,
+                );
+                if (this.localTypebot.enabled || typebotSessionRemoteJid) {
+                  console.log('poll text reponse', {
+                    message: selectedOption.name,
+                    owner: selectedOption.voters[0],
+                  });
+                  await this.typebotService.sendTypebot(
+                    { instanceName: this.instance.name },
+                    selectedOption.voters[0],
+                    {
+                      message: {
+                        extendedTextMessage: {
+                          text: selectedOption.name,
+                          contextInfo: {},
+                        },
+                      },
+                      owner: selectedOption.voters[0],
+                    },
+                  );
+                }
+              }
             }
-          }
 
-          if (status[update.status] === 'READ' && !key.fromMe) return;
+            if (status[update.status] === 'READ' && !key.fromMe) return;
 
-          if (update.message === null && update.status === undefined) {
-            this.logger.verbose('Message deleted');
+            if (update.message === null && update.status === undefined) {
+              this.logger.verbose('Message deleted');
 
-            this.logger.verbose('Sending data to webhook in event MESSAGE_DELETE');
-            this.sendDataWebhook(Events.MESSAGES_DELETE, key);
+              this.logger.verbose('Sending data to webhook in event MESSAGE_DELETE');
+              this.sendDataWebhook(Events.MESSAGES_DELETE, key);
+
+              const message: MessageUpdateRaw = {
+                ...key,
+                status: 'DELETED',
+                datetime: Date.now(),
+                owner: this.instance.name,
+              };
+
+              this.logger.verbose(message);
+
+              this.logger.verbose('Inserting message in database');
+              await this.repository.messageUpdate.insert(
+                [message],
+                this.instance.name,
+                database.SAVE_DATA.MESSAGE_UPDATE,
+              );
+
+              if (this.localChatwoot.enabled) {
+                this.chatwootService.eventWhatsapp(
+                  Events.MESSAGES_DELETE,
+                  { instanceName: this.instance.name },
+                  { key: key },
+                );
+              }
+
+              return;
+            }
 
             const message: MessageUpdateRaw = {
               ...key,
-              status: 'DELETED',
+              status: status[update.status],
               datetime: Date.now(),
               owner: this.instance.name,
+              pollUpdates,
             };
 
             this.logger.verbose(message);
 
+            this.logger.verbose('Sending data to webhook in event MESSAGES_UPDATE');
+            this.sendDataWebhook(Events.MESSAGES_UPDATE, message);
+
             this.logger.verbose('Inserting message in database');
-            await this.repository.messageUpdate.insert(
-              [message],
-              this.instance.name,
-              database.SAVE_DATA.MESSAGE_UPDATE,
-            );
-
-            if (this.localChatwoot.enabled) {
-              this.chatwootService.eventWhatsapp(
-                Events.MESSAGES_DELETE,
-                { instanceName: this.instance.name },
-                { key: key },
-              );
-            }
-
-            return;
+            this.repository.messageUpdate.insert([message], this.instance.name, database.SAVE_DATA.MESSAGE_UPDATE);
           }
-
-          const message: MessageUpdateRaw = {
-            ...key,
-            status: status[update.status],
-            datetime: Date.now(),
-            owner: this.instance.name,
-            pollUpdates,
-          };
-
-          this.logger.verbose(message);
-
-          this.logger.verbose('Sending data to webhook in event MESSAGES_UPDATE');
-          this.sendDataWebhook(Events.MESSAGES_UPDATE, message);
-
-          this.logger.verbose('Inserting message in database');
-          this.repository.messageUpdate.insert([message], this.instance.name, database.SAVE_DATA.MESSAGE_UPDATE);
         }
       }
     },
@@ -1525,7 +1647,7 @@ export class BaileysStartupService extends ChannelStartupService {
             labels = [...labels, data.association.labelId];
           }
           await this.repository.chat.update(
-            [{ id: chat.id, owner: this.instance.name, labels, pushName: chat.pushName }],
+            [{ id: chat.id, owner: this.instance.name, labels }],
             this.instance.name,
             database.SAVE_DATA.CHATS,
           );
@@ -1549,7 +1671,7 @@ export class BaileysStartupService extends ChannelStartupService {
         this.logger.verbose(`Event received: ${Object.keys(events).join(', ')}`);
         const database = this.configService.get<Database>('DATABASE');
         const settings = await this.findSettings();
-
+        //console.log(JSON.stringify(events, null, 2));
         if (events.call) {
           this.logger.verbose('Listening event: call');
           const call = events.call[0];
@@ -2029,7 +2151,7 @@ export class BaileysStartupService extends ChannelStartupService {
 
       const contentMsg = messageSent.message[getContentType(messageSent.message)] as any;
 
-      const messageRaw: MessageRaw = {
+      const messageRaw: { key: any } & MessageRaw = {
         key: messageSent.key,
         pushName: messageSent.pushName,
         message: { ...messageSent.message },
@@ -2055,7 +2177,10 @@ export class BaileysStartupService extends ChannelStartupService {
         this.instance.name,
         this.configService.get<Database>('DATABASE').SAVE_DATA.NEW_MESSAGE,
       );
-
+      this.client.ev.emit('messages.upsert', {
+        messages: [messageRaw],
+        type: 'notify',
+      });
       return messageSent;
     } catch (error) {
       this.logger.error(error);

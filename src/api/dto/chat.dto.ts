@@ -15,7 +15,10 @@ export class getBase64FromMediaMessageDto {
 }
 
 export class ContachSearchDto {
-  data: string;
+  data: {
+    search: string;
+    ids: string[];
+  };
   page: number;
   perPage: number;
 }
