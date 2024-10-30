@@ -25,7 +25,7 @@ import { WAMonitoringService } from '../services/monitor.service';
 const logger = new Logger('ChatController');
 
 export class ChatController {
-  constructor(private readonly waMonitor: WAMonitoringService) {}
+  constructor(private readonly waMonitor: WAMonitoringService) { }
 
   public async whatsappNumber({ instanceName }: InstanceDto, data: WhatsAppNumberDto) {
     logger.verbose('requested whatsappNumber from ' + instanceName + ' instance');

@@ -180,3 +180,5 @@ WORKDIR /evolution
 COPY --from=builder /evolution .
 
 CMD [ "node", "./dist/src/main.js" ]
+
+#build docker build -t youngkhaf/evolution-api .

@@ -530,105 +530,6 @@ export class BaileysStartupService extends ChannelStartupService {
     return await useMultiFileAuthState(join(INSTANCE_DIR, this.instance.name));
   }
 
-  busEvents = (): any[] => [
-    {
-      event: 'messages.upsert',
-      func: ({ messages, type }) => {
-        // Ignore notify messages
-        if (type !== 'notify') return;
-
-        const [messageCtx] = messages;
-        let payload = {
-          ...messageCtx,
-          body: messageCtx?.message?.extendedTextMessage?.text ?? messageCtx?.message?.conversation,
-          from: messageCtx?.key?.remoteJid,
-          type: 'text',
-        };
-
-        // Ignore pollUpdateMessage
-        if (messageCtx.message?.pollUpdateMessage) return;
-
-        // Ignore broadcast messages
-        if (payload.from === 'status@broadcast') return;
-
-        // Ignore messages from self
-        if (payload?.key?.fromMe) return;
-
-        // Detect location
-        if (messageCtx.message?.locationMessage) {
-          const { degreesLatitude, degreesLongitude } = messageCtx.message.locationMessage;
-          if (typeof degreesLatitude === 'number' && typeof degreesLongitude === 'number') {
-            payload = { ...payload, body: utils.generateRefprovider('_event_location_'), type: 'location' };
-          }
-        }
-        // Detect  media
-        if (messageCtx.message?.imageMessage) {
-          payload = { ...payload, body: utils.generateRefprovider('_event_media_'), type: 'image' };
-        }
-
-        // Detect  ectar file
-        if (messageCtx.message?.documentMessage) {
-          payload = { ...payload, body: utils.generateRefprovider('_event_document_'), type: 'file' };
-        }
-
-        // Detect voice note
-        if (messageCtx.message?.audioMessage) {
-          payload = { ...payload, body: utils.generateRefprovider('_event_voice_note_'), type: 'voice' };
-        }
-
-        // Check from user and group is valid
-        if (!utils.formatPhone(payload.from)) {
-          return;
-        }
-
-        const btnCtx = payload?.message?.buttonsResponseMessage?.selectedDisplayText;
-        if (btnCtx) payload.body = btnCtx;
-
-        const listRowId = payload?.message?.listResponseMessage?.title;
-        if (listRowId) payload.body = listRowId;
-
-        payload.from = utils.formatPhone(payload.from, this.plugin);
-        this.emit('message', payload);
-      },
-    },
-    {
-      event: 'messages.update',
-      func: async (message) => {
-        for (const { key, update } of message) {
-          if (update.pollUpdates) {
-            const pollCreation = await this.getMessage(key);
-            if (pollCreation) {
-              const pollMessage = await getAggregateVotesInPollMessage({
-                message: pollCreation,
-                pollUpdates: update.pollUpdates,
-              });
-              const [messageCtx] = message;
-
-              const payload = {
-                ...messageCtx,
-                body: pollMessage.find((poll) => poll.voters.length > 0)?.name || '',
-                from: utils.formatPhone(key.remoteJid, this.plugin),
-                voters: pollCreation,
-                type: 'poll',
-              };
-
-              this.emit('message', payload);
-            }
-          }
-        }
-      },
-    },
-  ];
-
-  initBusEvents = (_sock: any): void => {
-    this.vendor = _sock;
-    const listEvents = this.busEvents();
-
-    for (const { event, func } of listEvents) {
-      this.vendor.ev.on(event, func);
-    }
-  };
-
   public async connectToWhatsapp(number?: string, mobile?: boolean): Promise<WASocket> {
     this.logger.verbose('Connecting to whatsapp');
     try {
@@ -973,7 +874,7 @@ export class BaileysStartupService extends ChannelStartupService {
           continue;
         }
 
-        chatsRaw.push({ id: chat.id, owner: this.instance.wuid, pushName: chat.name });
+        chatsRaw.push({ id: chat.id, owner: this.instance.wuid });
       }
 
       this.logger.verbose('Sending data to webhook in event CHATS_UPSERT');
@@ -1156,7 +1057,6 @@ export class BaileysStartupService extends ChannelStartupService {
             id: chat.id,
             owner: this.instance.name,
             lastMsgTimestamp: chat.lastMessageRecvTimestamp,
-            pushName: chat.name,
           });
         }
 
@@ -1747,7 +1647,7 @@ export class BaileysStartupService extends ChannelStartupService {
             labels = [...labels, data.association.labelId];
           }
           await this.repository.chat.update(
-            [{ id: chat.id, owner: this.instance.name, labels, pushName: chat.pushName }],
+            [{ id: chat.id, owner: this.instance.name, labels }],
             this.instance.name,
             database.SAVE_DATA.CHATS,
           );
@@ -2251,7 +2151,7 @@ export class BaileysStartupService extends ChannelStartupService {
 
       const contentMsg = messageSent.message[getContentType(messageSent.message)] as any;
 
-      const messageRaw: MessageRaw = {
+      const messageRaw: { key: any } & MessageRaw = {
         key: messageSent.key,
         pushName: messageSent.pushName,
         message: { ...messageSent.message },
